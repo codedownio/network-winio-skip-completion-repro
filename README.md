@@ -12,7 +12,6 @@ On Windows, with GHC (e.g. from [ghcup](https://www.haskell.org/ghcup/)), in Pow
 Results on Windows 11:
 
 ```
-socket provider is IFS (XP1_IFS_HANDLES): yes
 without (network master)                 WSARecv: 100/100 finished at once, 100 packets queued | WSASend: 100/100 at once, 100 packets queued
 with FILE_SKIP_COMPLETION_PORT_ON_SUCCESS WSARecv: 100/100 finished at once,   0 packets queued | WSASend: 100/100 at once,   0 packets queued
 ```
@@ -23,7 +22,7 @@ Under GHC's native I/O manager (WinIO), network associates sockets with the I/O 
 
 ## The fix
 
-[codedownio/network `winio-skip-completion-on-success`](https://github.com/codedownio/network/tree/winio-skip-completion-on-success) sets `FILE_SKIP_COMPLETION_PORT_ON_SUCCESS` on a socket when it's associated with the completion port, in `socket` and `accept`. With that flag, Windows doesn't queue a packet for an operation that finishes immediately, so there is nothing left to dequeue after GHC has completed and freed the request. Operations that really go pending still get their packet as before. This is the same flag GHC sets on its own file handles, whose inline completion path relies on it. The flag works on ordinary sockets, which go straight to Windows' built-in TCP/IP provider; the one documented exception is a socket behind a non-IFS Layered Service Provider (a deprecated mechanism some older firewalls and proxies used), so the fix checks the socket's `XP1_IFS_HANDLES` bit first and leaves such a socket alone. The repro prints that bit for a plain loopback socket: it's set.
+[codedownio/network `winio-skip-completion-on-success`](https://github.com/codedownio/network/tree/winio-skip-completion-on-success) sets `FILE_SKIP_COMPLETION_PORT_ON_SUCCESS` on a socket when it's associated with the completion port, in `socket` and `accept`. With that flag, Windows doesn't queue a packet for an operation that finishes immediately, so there is nothing left to dequeue after GHC has completed and freed the request. Operations that really go pending still get their packet as before. This is the same flag GHC sets on its own file handles, whose inline completion path relies on it. Microsoft [documents the flag for sockets](https://learn.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-setfilecompletionnotificationmodes), with one stated exception: sockets behind a non-IFS Layered Service Provider, a mechanism some older firewalls and proxies used, [deprecated since Windows 8](https://learn.microsoft.com/en-us/windows/win32/winsock/categorizing-layered-service-providers-and-applications).
 
 ## Extra information
 
