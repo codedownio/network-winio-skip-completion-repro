@@ -1,20 +1,32 @@
 # WinIO: a socket operation that finishes at once still queues a completion packet
 
-Under GHC's native I/O manager (WinIO), network associates sockets with the I/O manager's
-completion port but doesn't set `FILE_SKIP_COMPLETION_PORT_ON_SUCCESS` on them. Without that
-flag, Windows queues a completion packet even for a `WSARecv`/`WSASend` that finishes
-immediately.
+## Running it
 
-`sync_completion.c` associates a socket with a completion port the way WinIO does, issues
-operations that can finish at once, and checks the port. On Windows 11:
+On Windows, with GHC (e.g. from [ghcup](https://www.haskell.org/ghcup/)), in PowerShell:
+
+```
+.\run.ps1 original    # sockets associated with the completion port as network master does
+.\run.ps1 fixed       # also with FILE_SKIP_COMPLETION_PORT_ON_SUCCESS, as the fix does
+```
+
+`run.ps1` compiles `sync_completion.c` with the C toolchain GHC ships with (`ghc -no-hs-main`)
+and runs it; pass `-Ghc ghc-9.12.4` to use a particular GHC. Results on Windows 11:
 
 ```
 without (network master)                 WSARecv: 100/100 finished at once, 100 packets queued | WSASend: 100/100 at once, 100 packets queued
 with FILE_SKIP_COMPLETION_PORT_ON_SUCCESS WSARecv: 100/100 finished at once,   0 packets queued | WSASend: 100/100 at once,   0 packets queued
 ```
 
-Build with `./build.sh` (nixpkgs' mingw-w64 cross toolchain) or any mingw gcc:
-`gcc -O1 -o sync_completion.exe sync_completion.c -lws2_32`.
+The fix is [codedownio/network `winio-skip-completion-on-success`](https://github.com/codedownio/network/tree/winio-skip-completion-on-success).
+
+## What it shows
+
+Under GHC's native I/O manager (WinIO), network associates sockets with the I/O manager's
+completion port but doesn't set `FILE_SKIP_COMPLETION_PORT_ON_SUCCESS` on them. Without that
+flag, Windows queues a completion packet even for a `WSARecv`/`WSASend` that finishes
+immediately. `sync_completion.c` associates a socket with a completion port the way WinIO does,
+issues 100 receives and 100 sends that finish at once, and counts the packets that land on the
+port.
 
 ## Why it matters
 
@@ -45,4 +57,3 @@ repro demonstrates the packet rather than the crash.
 
 With `FILE_SKIP_COMPLETION_PORT_ON_SUCCESS` set when a socket is associated (as GHC's own file
 handles get), no packet is queued for an operation that finishes at once, and the suite passes.
-Fix: https://github.com/codedownio/network/tree/winio-skip-completion-on-success

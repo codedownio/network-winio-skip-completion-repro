@@ -1,10 +1,12 @@
 /* Does a WSARecv/WSASend that completes at once still queue a completion packet?
-   Associates a socket with a completion port the way GHC's WinIO does, issues an operation that
-   can finish immediately, and checks the port, with and without
-   FILE_SKIP_COMPLETION_PORT_ON_SUCCESS. */
+   Associates a socket with a completion port the way GHC's WinIO does, issues operations that
+   finish immediately, and checks the port.
+     sync_completion original   socket associated as network master does
+     sync_completion fixed      also with FILE_SKIP_COMPLETION_PORT_ON_SUCCESS */
 #include <winsock2.h>
 #include <windows.h>
 #include <stdio.h>
+#include <string.h>
 
 static void pair(SOCKET *a, SOCKET *b) {
   struct sockaddr_in addr = {0}; int len = sizeof addr;
@@ -45,9 +47,12 @@ static void trial(int skip) {
   closesocket(client); closesocket(server); CloseHandle(port);
 }
 
-int main(void) {
+int main(int argc, char **argv) {
+  if (argc != 2 || (strcmp(argv[1], "original") && strcmp(argv[1], "fixed"))) {
+    fprintf(stderr, "usage: sync_completion original|fixed\n");
+    return 2;
+  }
   WSADATA w; WSAStartup(MAKEWORD(2, 2), &w);
-  trial(0);
-  trial(1);
+  trial(strcmp(argv[1], "fixed") == 0);
   return 0;
 }
