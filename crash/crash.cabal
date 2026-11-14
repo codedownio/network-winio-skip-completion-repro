@@ -1,0 +1,8 @@
+cabal-version: 2.4
+name:          crash
+version:       0
+executable crash
+  main-is:          Main.hs
+  build-depends:    base, bytestring, network
+  default-language: Haskell2010
+  ghc-options:      -threaded -rtsopts "-with-rtsopts=--io-manager=native -N4 -A64k"

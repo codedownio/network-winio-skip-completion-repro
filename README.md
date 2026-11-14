@@ -2,14 +2,27 @@
 
 ## Running it
 
-On Windows, with GHC (e.g. from [ghcup](https://www.haskell.org/ghcup/)), in PowerShell:
+**The crash.** In `crash/`, on Windows, with a GHC whose WinIO support is enabled for libraries (`__IO_MANAGER_WINIO__ >= 2`: 9.14.2, currently [9.14.2-rc3](https://downloads.haskell.org/~ghc/9.14.2-rc3/); 9.14.1 and earlier compile network's WinIO code out) and cabal:
+
+```
+cabal run -w <path to 9.14.2 ghc.exe> --project-file=cabal.project.original crash    # network master
+cabal run -w <path to 9.14.2 ghc.exe> --project-file=cabal.project.fixed crash       # master plus the fix
+```
+
+The project files build network from [codedownio/network](https://github.com/codedownio/network) commits with the generated `configure` script committed (branches `repro-original` and `repro-skip-fixed`); running `configure` needs an `sh`, which ghcup's msys2 or Git for Windows provides. `crash` runs 64 busy loopback socket pairs under `--io-manager=native` with the GC reusing memory. Results on Windows 11 with 9.14.2-rc3:
+
+```
+original: crashes at once, every run (exit code 11)
+  Access violation in generated code when reading 0xffffffffffffffff
+fixed:    survived 120s, every run
+```
+
+**The stale packets.** In the top directory, with any GHC, in PowerShell:
 
 ```
 .\run.ps1 original    # sockets associated with the completion port as network master does
 .\run.ps1 fixed       # also with FILE_SKIP_COMPLETION_PORT_ON_SUCCESS, as the fix does
 ```
-
-Results on Windows 11:
 
 ```
 without (network master)                 WSARecv: 100/100 finished at once, 100 packets queued | WSASend: 100/100 at once, 100 packets queued
@@ -30,11 +43,4 @@ Under GHC's native I/O manager (WinIO), network associates sockets with the I/O 
 
 The inline completion path: network master answers `Mgr.CbPending` when a call succeeds at once (since `c22363a`). GHC's `withOverlappedEx` (`GHC.Internal.Event.Windows`) then calls `getOverlappedResult` straight away, finds the request finished, swaps the record's completion-data pointer for `nullReq`, runs the callback and returns, after which `withRequest` releases the `HASKELL_OVERLAPPED` (an `allocaBytes` buffer). When `processCompletion` dequeues the stale packet, a record that hasn't been reused yet still holds `nullReq` and the packet is ignored; one that has been reused is followed as if it were live.
 
-The crash needs that reuse to happen before the packet is processed, so it shows up under load. In our application's test suite (dozens of busy sockets, a web server, websockets) the server died within a minute with
-
-```
-Access violation in generated code when reading 0xffffffffffffffff
-  * 0x14874d686  codedown-server.exe+0x874d686
-```
-
-which resolves to `GHC.Internal.Event.Windows.$wprocessCompletion`, and passes with the fix. A small stress program (64 socket pairs, GC after every receive) didn't hit the window in 11 one-minute runs, so this repro demonstrates the stale packets rather than the crash.
+The crash needs that reuse to happen before the packet is processed; `crash/` arranges that with many busy sockets and frequent GCs, and it's what our application (warp, websockets, dozens of busy sockets) hit too: the server died within a minute in `GHC.Internal.Event.Windows.$wprocessCompletion`, and runs clean with the fix.

@@ -1,0 +1,7 @@
+packages: .
+
+-- network master (2071e8e), with its generated configure script committed
+source-repository-package
+  type: git
+  location: https://github.com/codedownio/network
+  tag: daa4c59a8a7ad8a944cd49c722796115061afd9b

@@ -1,0 +1,7 @@
+packages: .
+
+-- master plus the fix, with its generated configure script committed
+source-repository-package
+  type: git
+  location: https://github.com/codedownio/network
+  tag: 06ca897e30e82c441ac4f157fb5f08618e5fa92d
