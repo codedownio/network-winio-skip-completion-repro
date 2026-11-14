@@ -22,6 +22,10 @@ static void pair(SOCKET *a, SOCKET *b) {
 
 static void trial(int skip) {
   SOCKET client, server; pair(&client, &server);
+  WSAPROTOCOL_INFOW info; int infoLen = sizeof info;
+  int ifs = getsockopt(server, SOL_SOCKET, SO_PROTOCOL_INFOW, (char *)&info, &infoLen) == 0
+            && (info.dwServiceFlags1 & XP1_IFS_HANDLES);
+  printf("socket provider is IFS (XP1_IFS_HANDLES): %s\n", ifs ? "yes" : "no");
   HANDLE port = CreateIoCompletionPort(INVALID_HANDLE_VALUE, NULL, 0, 0);
   CreateIoCompletionPort((HANDLE)server, port, 42, 0);
   if (skip) SetFileCompletionNotificationModes((HANDLE)server, FILE_SKIP_COMPLETION_PORT_ON_SUCCESS);

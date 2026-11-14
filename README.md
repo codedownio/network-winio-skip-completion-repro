@@ -12,6 +12,7 @@ On Windows, with GHC (e.g. from [ghcup](https://www.haskell.org/ghcup/)), in Pow
 Results on Windows 11:
 
 ```
+socket provider is IFS (XP1_IFS_HANDLES): yes
 without (network master)                 WSARecv: 100/100 finished at once, 100 packets queued | WSASend: 100/100 at once, 100 packets queued
 with FILE_SKIP_COMPLETION_PORT_ON_SUCCESS WSARecv: 100/100 finished at once,   0 packets queued | WSASend: 100/100 at once,   0 packets queued
 ```
@@ -22,7 +23,7 @@ Under GHC's native I/O manager (WinIO), network associates sockets with the I/O 
 
 ## The fix
 
-[codedownio/network `winio-skip-completion-on-success`](https://github.com/codedownio/network/tree/winio-skip-completion-on-success) sets `FILE_SKIP_COMPLETION_PORT_ON_SUCCESS` on a socket when it's associated with the completion port, in `socket` and `accept`. With that flag, Windows doesn't queue a packet for an operation that finishes immediately, so there is nothing left to dequeue after GHC has completed and freed the request. Operations that really go pending still get their packet as before. This is the same flag GHC sets on its own file handles, whose inline completion path relies on it.
+[codedownio/network `winio-skip-completion-on-success`](https://github.com/codedownio/network/tree/winio-skip-completion-on-success) sets `FILE_SKIP_COMPLETION_PORT_ON_SUCCESS` on a socket when it's associated with the completion port, in `socket` and `accept`. With that flag, Windows doesn't queue a packet for an operation that finishes immediately, so there is nothing left to dequeue after GHC has completed and freed the request. Operations that really go pending still get their packet as before. This is the same flag GHC sets on its own file handles, whose inline completion path relies on it. Windows only honours the flag when the socket's protocol provider is an IFS one (a non-IFS layered service provider can still queue the packet), so the fix sets it only when the provider reports `XP1_IFS_HANDLES`, as libuv does. The repro prints that flag; on a stock Windows install it's set.
 
 ## Extra information
 
